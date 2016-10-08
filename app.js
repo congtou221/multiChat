@@ -72,30 +72,39 @@ server.listen(app.get('port'), function () {
 });
 
 var users = {};
+var usocket = {};
 io.sockets.on('connection', function(socket){
   socket.on('online', function(data){
     socket.name = data.user;
+
     if(!users[data.user]){
       users[data.user] = data.user;
+      usocket[data.user] = socket;
     }
     io.sockets.emit('online', {user: data.user, users: users});
   });
 
   socket.on('onmessage', function(data){
     var msg = data.msg;
-
+    
     if(data.to == 'all'){
-      socket.broadcast.emit('onmessage', data);
+      io.emit('onmessage', data);
       return;
     }
-    var clients = io.sockets.clients();
- 
-    for(var item in clients){
-      if(data.to === item.name){
-        // io.sockets.emit('onmessage', data);
-      }
-    }
 
-  })
+    usocket[data.to].emit('onmessage', data);
+    usocket[data.from].emit('onmessage', data);
+ 
+  });
+
+  socket.on('disconnect', function(){
+    if(users[socket.name] || usocket[socket.name]){
+      delete users[socket.name];
+      delete usocket[socket.name];
+
+      // 向其他所有用户广播该用户下线信息
+      socket.broadcast.emit('offline', {offlineUser: socket.name , users: users});
+    }
+  });
 })
 module.exports = app;
